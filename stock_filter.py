@@ -2,6 +2,8 @@ import json
 import numpy as np
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+import subprocess
+import os
 
 # 샘플 주식 데이터 생성 함수
 def create_sample_data() -> List[Dict[str, Any]]:
@@ -180,6 +182,51 @@ def check_condition_3(monthly_data: List[Dict]) -> bool:
     
     return recent_3_months_avg > recent_6_months_avg
 
+def auto_git_commit_push(commit_message: str = None) -> bool:
+    """
+    자동으로 Git add, commit, push를 수행합니다.
+    
+    Args:
+        commit_message: 커밋 메시지 (None이면 자동 생성)
+    
+    Returns:
+        bool: 성공 여부
+    """
+    try:
+        # 커밋 메시지가 없으면 자동 생성
+        if not commit_message:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            commit_message = f"Auto update: {current_time}"
+        
+        print("🔄 Git 자동화 시작...")
+        
+        # 1. git add .
+        print("  📁 git add . 실행 중...")
+        result = subprocess.run(['git', 'add', '.'], capture_output=True, text=True, check=True)
+        print("  ✅ git add 완료")
+        
+        # 2. git commit
+        print(f"  💾 git commit 실행 중... (메시지: {commit_message})")
+        result = subprocess.run(['git', 'commit', '-m', commit_message], capture_output=True, text=True, check=True)
+        print("  ✅ git commit 완료")
+        
+        # 3. git push
+        print("  🚀 git push 실행 중...")
+        result = subprocess.run(['git', 'push', 'origin', 'main'], capture_output=True, text=True, check=True)
+        print("  ✅ git push 완료")
+        
+        print("🎉 Git 자동화 완료!")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Git 자동화 실패: {e}")
+        print(f"   stdout: {e.stdout}")
+        print(f"   stderr: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"❌ 예상치 못한 오류: {e}")
+        return False
+
 def filter_stocks(stocks_data: List[Dict]) -> List[Dict]:
     """모든 조건을 만족하는 종목을 필터링합니다."""
     filtered_stocks = []
@@ -242,6 +289,22 @@ def main():
     
     # JSON 파일로 저장
     save_to_json(filtered_stocks)
+    
+    # Git 자동화 실행
+    print("\n" + "=" * 50)
+    print("Git 자동화 시작...")
+    
+    # 커밋 메시지 생성
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    commit_message = f"Auto update stock data: {len(filtered_stocks)} stocks filtered at {current_time}"
+    
+    # Git 자동화 실행
+    success = auto_git_commit_push(commit_message)
+    
+    if success:
+        print("✅ 모든 작업이 완료되었습니다!")
+    else:
+        print("⚠️  필터링은 완료되었지만 Git 자동화에 실패했습니다.")
 
 if __name__ == "__main__":
     main() 

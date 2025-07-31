@@ -38,7 +38,7 @@ const StockListView = () => {
       if (isPageVisible.current) {
         fetchStocks();
       }
-    }, 5000); // 5초
+    }, 300000); // 5분 (300초)
   };
 
   const stopAutoRefresh = () => {
@@ -82,7 +82,7 @@ const StockListView = () => {
 
   if (loading && stocks.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
           <p className="text-gray-600 text-lg">데이터를 불러오는 중...</p>
@@ -93,7 +93,7 @@ const StockListView = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center p-4">
         <div className="text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,7 +115,7 @@ const StockListView = () => {
 
   if (stocks.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-100 flex items-center justify-center p-4">
         <div className="text-center">
           <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,10 +131,10 @@ const StockListView = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
             조건 만족 종목 리스트
           </h1>
           <p className="text-gray-600 mb-2">
@@ -147,7 +147,7 @@ const StockListView = () => {
           )}
           <div className="flex items-center justify-center mt-2 space-x-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-green-600 text-sm font-medium">자동 새로고침 활성화 (5초마다)</span>
+            <span className="text-green-600 text-sm font-medium">자동 새로고침 활성화 (5분마다)</span>
           </div>
         </div>
 
@@ -174,51 +174,51 @@ const StockListView = () => {
           </button>
         </div>
 
-        {/* 종목 리스트 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* 종목 리스트 - 반응형 그리드 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
           {stocks.map((stock, index) => (
             <div
               key={`${stock.code}-${index}`}
               className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100 overflow-hidden"
             >
               {/* 카드 헤더 */}
-              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
-                <h3 className="text-white font-semibold text-lg truncate">
+              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 md:px-6 py-4">
+                <h3 className="text-white font-semibold text-base md:text-lg truncate">
                   {stock.name}
                 </h3>
-                <p className="text-indigo-100 text-sm font-mono">
+                <p className="text-indigo-100 text-xs md:text-sm font-mono">
                   {stock.code}
                 </p>
               </div>
 
               {/* 카드 바디 */}
-              <div className="p-6">
+              <div className="p-4 md:p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-600 text-sm font-medium">현재가</span>
-                  <span className="text-2xl font-bold text-gray-800">
+                  <span className="text-gray-600 text-xs md:text-sm font-medium">현재가</span>
+                  <span className="text-xl md:text-2xl font-bold text-gray-800">
                     {stock.price.toLocaleString()}원
                   </span>
                 </div>
 
                 {/* 가격 변화 표시 (샘플) */}
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-500 text-sm">등락률</span>
-                  <span className="text-green-600 font-semibold text-sm">
+                  <span className="text-gray-500 text-xs md:text-sm">등락률</span>
+                  <span className="text-green-600 font-semibold text-xs md:text-sm">
                     +2.5%
                   </span>
                 </div>
 
                 {/* 거래량 (샘플) */}
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-500 text-sm">거래량</span>
-                  <span className="text-gray-700 font-medium text-sm">
+                  <span className="text-gray-500 text-xs md:text-sm">거래량</span>
+                  <span className="text-gray-700 font-medium text-xs md:text-sm">
                     {Math.floor(Math.random() * 1000 + 100)}K
                   </span>
                 </div>
 
                 {/* 액션 버튼 */}
                 <div className="pt-4 border-t border-gray-100">
-                  <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm">
+                  <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-xs md:text-sm">
                     상세보기
                   </button>
                 </div>
@@ -228,7 +228,7 @@ const StockListView = () => {
         </div>
 
         {/* 푸터 */}
-        <div className="text-center mt-8 text-gray-500 text-sm">
+        <div className="text-center mt-8 text-gray-500 text-xs md:text-sm">
           <p>페이지가 백그라운드 상태일 때는 자동 새로고침이 일시 중지됩니다.</p>
         </div>
       </div>
