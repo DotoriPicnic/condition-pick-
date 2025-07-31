@@ -204,6 +204,16 @@ def auto_git_commit_push(commit_message: str = None) -> bool:
         
         print("🔄 Git 자동화 시작...")
         
+        # 0. 변경사항 확인
+        print("  🔍 변경사항 확인 중...")
+        status_result = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True, check=True)
+        
+        if not status_result.stdout.strip():
+            print("  ℹ️  변경사항이 없습니다. Git 작업을 건너뜁니다.")
+            return True
+        
+        print(f"  📝 변경된 파일: {status_result.stdout.strip()}")
+        
         # 1. git add .
         print("  📁 git add . 실행 중...")
         result = subprocess.run(['git', 'add', '.'], capture_output=True, text=True, check=True)
@@ -267,8 +277,15 @@ def filter_stocks(stocks_data: List[Dict]) -> List[Dict]:
 
 def save_to_json(filtered_stocks: List[Dict], filename: str = "data.json"):
     """필터링된 종목을 JSON 파일로 저장합니다."""
+    # 현재 시간을 메타데이터로 추가
+    data_with_metadata = {
+        "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "total_count": len(filtered_stocks),
+        "stocks": filtered_stocks
+    }
+    
     with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(filtered_stocks, f, ensure_ascii=False, indent=2)
+        json.dump(data_with_metadata, f, ensure_ascii=False, indent=2)
     print(f"결과가 {filename} 파일로 저장되었습니다.")
 
 def run_stock_filtering():
