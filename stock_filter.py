@@ -4,6 +4,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import subprocess
 import os
+import schedule
+import time
+import signal
+import sys
 
 # 샘플 주식 데이터 생성 함수
 def create_sample_data() -> List[Dict[str, Any]]:
@@ -267,10 +271,11 @@ def save_to_json(filtered_stocks: List[Dict], filename: str = "data.json"):
         json.dump(filtered_stocks, f, ensure_ascii=False, indent=2)
     print(f"결과가 {filename} 파일로 저장되었습니다.")
 
-def main():
-    """메인 함수"""
-    print("주식 필터링 시작...")
-    print("=" * 50)
+def run_stock_filtering():
+    """주식 필터링 작업을 실행합니다."""
+    print("\n" + "=" * 60)
+    print(f"🕐 스케줄된 작업 실행: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
     
     # 샘플 데이터 생성
     stocks_data = create_sample_data()
@@ -305,6 +310,51 @@ def main():
         print("✅ 모든 작업이 완료되었습니다!")
     else:
         print("⚠️  필터링은 완료되었지만 Git 자동화에 실패했습니다.")
+    
+    print("=" * 60)
+    print(f"⏰ 다음 실행 예정: {(datetime.now() + timedelta(seconds=30)).strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+
+def signal_handler(signum, frame):
+    """시그널 핸들러: Ctrl+C로 프로그램 종료"""
+    print("\n\n🛑 프로그램 종료 요청을 받았습니다.")
+    print("📊 지금까지의 실행 통계:")
+    print(f"   - 시작 시간: {start_time}")
+    print(f"   - 종료 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("👋 프로그램을 종료합니다.")
+    sys.exit(0)
+
+def main():
+    """메인 함수"""
+    global start_time
+    start_time = datetime.now()
+    
+    print("🚀 주식 필터링 자동화 프로그램 시작!")
+    print("=" * 60)
+    print(f"📅 시작 시간: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("⏰ 실행 주기: 30초마다 (테스트용)")
+    print("🛑 종료 방법: Ctrl+C")
+    print("=" * 60)
+    
+    # 시그널 핸들러 등록 (Ctrl+C 처리)
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    # 초기 실행
+    run_stock_filtering()
+    
+    # 30초마다 스케줄 설정 (테스트용)
+    schedule.every(30).seconds.do(run_stock_filtering)
+    
+    print("\n🔄 스케줄러가 시작되었습니다. 5분마다 자동으로 실행됩니다...")
+    print("💡 프로그램을 종료하려면 Ctrl+C를 누르세요.")
+    
+    # 스케줄러 실행
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(1)  # 1초마다 스케줄 확인
+    except KeyboardInterrupt:
+        signal_handler(signal.SIGINT, None)
 
 if __name__ == "__main__":
     main() 
