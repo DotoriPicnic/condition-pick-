@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const StockListView = () => {
   const [stocks, setStocks] = useState([]);
@@ -8,7 +8,7 @@ const StockListView = () => {
   const intervalRef = useRef(null);
   const isPageVisible = useRef(true);
 
-  const fetchStocks = async () => {
+  const fetchStocks = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -27,9 +27,9 @@ const StockListView = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const startAutoRefresh = () => {
+  const startAutoRefresh = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
@@ -39,14 +39,14 @@ const StockListView = () => {
         fetchStocks();
       }
     }, 300000); // 5분 (300초)
-  };
+  }, [fetchStocks]);
 
-  const stopAutoRefresh = () => {
+  const stopAutoRefresh = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-  };
+  }, []);
 
   // 페이지 가시성 변경 감지
   useEffect(() => {
@@ -78,7 +78,7 @@ const StockListView = () => {
     return () => {
       stopAutoRefresh();
     };
-  }, []);
+  }, [fetchStocks, startAutoRefresh, stopAutoRefresh]);
 
   if (loading && stocks.length === 0) {
     return (
