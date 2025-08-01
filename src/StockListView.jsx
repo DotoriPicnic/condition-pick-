@@ -1,31 +1,84 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import KiwoomAPI from './kiwoomApi';
 
 const StockListView = () => {
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginInfo, setLoginInfo] = useState({ userId: '', password: '' });
+  const [conditionIndex, setConditionIndex] = useState(0); // 조건검색 인덱스
   const intervalRef = useRef(null);
   const isPageVisible = useRef(true);
+  const kiwoomApi = useRef(new KiwoomAPI());
 
-  const fetchStocks = useCallback(async () => {
+  // 로그인 처리
+  const handleLogin = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('https://raw.githubusercontent.com/DotoriPicnic/condition-pick-/main/data.json');
+      const result = await kiwoomApi.current.login(loginInfo.userId, loginInfo.password);
+      setIsLoggedIn(true);
+      console.log('로그인 성공:', result);
       
-      if (!response.ok) {
-        throw new Error('데이터를 불러올 수 없습니다');
-      }
-      
-      const data = await response.json();
-      setStocks(data);
-      setLastUpdate(new Date());
+      // 로그인 성공 후 조건검색 결과 가져오기
+      await fetchConditionResult();
     } catch (err) {
-      setError(err.message);
+      setError(`로그인 실패: ${err.message}`);
+      setIsLoggedIn(false);
     } finally {
       setLoading(false);
+    }
+  }, [loginInfo]);
+
+  // 조건검색 결과 가져오기
+  const fetchConditionResult = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await kiwoomApi.current.getConditionResult(conditionIndex);
+      
+      // 키움증권 API 응답 형식에 맞게 데이터 변환
+      const stockData = result.map(item => ({
+        name: item.종목명 || item.name,
+        code: item.종목코드 || item.code,
+        price: parseInt(item.현재가 || item.price) || 0,
+        change: parseInt(item.등락폭 || item.change) || 0,
+        changeRate: parseFloat(item.등락률 || item.changeRate) || 0,
+        volume: parseInt(item.거래량 || item.volume) || 0,
+        amount: parseInt(item.거래대금 || item.amount) || 0
+      }));
+      
+      setStocks(stockData);
+      setLastUpdate(new Date());
+    } catch (err) {
+      setError(`조건검색 결과를 가져올 수 없습니다: ${err.message}`);
+      // API 오류 시 기존 data.json 사용 (폴백)
+      try {
+        const response = await fetch('https://raw.githubusercontent.com/DotoriPicnic/condition-pick-/main/data.json');
+        if (response.ok) {
+          const data = await response.json();
+          setStocks(data);
+          setLastUpdate(new Date());
+        }
+      } catch (fallbackErr) {
+        setError(`데이터를 불러올 수 없습니다: ${fallbackErr.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [conditionIndex]);
+
+  // 실시간 데이터 구독
+  const subscribeRealTimeData = useCallback(async (stockCodes) => {
+    try {
+      await kiwoomApi.current.subscribeRealTimeData(stockCodes);
+      console.log('실시간 데이터 구독 성공');
+    } catch (err) {
+      console.error('실시간 데이터 구독 실패:', err);
     }
   }, []);
 
@@ -35,11 +88,11 @@ const StockListView = () => {
     }
     
     intervalRef.current = setInterval(() => {
-      if (isPageVisible.current) {
-        fetchStocks();
+      if (isPageVisible.current && isLoggedIn) {
+        fetchConditionResult();
       }
     }, 300000); // 5분 (300초)
-  }, [fetchStocks]);
+  }, [fetchConditionResult, isLoggedIn]);
 
   const stopAutoRefresh = useCallback(() => {
     if (intervalRef.current) {
@@ -53,9 +106,9 @@ const StockListView = () => {
     const handleVisibilityChange = () => {
       isPageVisible.current = !document.hidden;
       
-      if (isPageVisible.current) {
+      if (isPageVisible.current && isLoggedIn) {
         // 페이지가 다시 보이면 즉시 데이터 새로고침
-        fetchStocks();
+        fetchConditionResult();
         startAutoRefresh();
       } else {
         // 페이지가 숨겨지면 자동 새로고침 중지
@@ -68,17 +121,85 @@ const StockListView = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchStocks, startAutoRefresh, stopAutoRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchConditionResult, startAutoRefresh, stopAutoRefresh, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 컴포넌트 마운트 시 초기 데이터 로드 및 자동 새로고침 시작
   useEffect(() => {
-    fetchStocks();
-    startAutoRefresh();
+    if (isLoggedIn) {
+      fetchConditionResult();
+      startAutoRefresh();
+    }
 
     return () => {
       stopAutoRefresh();
     };
-  }, [fetchStocks, startAutoRefresh, stopAutoRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchConditionResult, startAutoRefresh, stopAutoRefresh, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 로그인 폼 렌더링
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">키움증권 로그인</h1>
+            <p className="text-gray-600">조건검색 결과를 확인하려면 로그인해주세요</p>
+          </div>
+          
+          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">아이디</label>
+              <input
+                type="text"
+                value={loginInfo.userId}
+                onChange={(e) => setLoginInfo(prev => ({ ...prev, userId: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="키움증권 아이디"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+              <input
+                type="password"
+                value={loginInfo.password}
+                onChange={(e) => setLoginInfo(prev => ({ ...prev, password: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="키움증권 비밀번호"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">조건검색 인덱스</label>
+              <input
+                type="number"
+                value={conditionIndex}
+                onChange={(e) => setConditionIndex(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="0"
+                min="0"
+              />
+            </div>
+            
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              {loading ? '로그인 중...' : '로그인'}
+            </button>
+          </form>
+          
+          {error && (
+            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (loading && stocks.length === 0) {
     return (
@@ -103,7 +224,7 @@ const StockListView = () => {
           <h2 className="text-xl font-semibold text-gray-800 mb-2">오류 발생</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button 
-            onClick={fetchStocks}
+            onClick={fetchConditionResult}
             className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
           >
             다시 시도
@@ -135,10 +256,10 @@ const StockListView = () => {
         {/* 헤더 */}
         <div className="text-center mb-8">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
-            조건 만족 종목 리스트
+            키움증권 조건검색 결과
           </h1>
           <p className="text-gray-600 mb-2">
-            필터링 조건을 만족하는 {stocks.length}개 종목
+            조건검색 인덱스 {conditionIndex} - {stocks.length}개 종목
           </p>
           {lastUpdate && (
             <p className="text-gray-500 text-sm">
@@ -154,7 +275,7 @@ const StockListView = () => {
         {/* 수동 새로고침 버튼 */}
         <div className="text-center mb-6">
           <button 
-            onClick={fetchStocks}
+            onClick={fetchConditionResult}
             disabled={loading}
             className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200 flex items-center mx-auto space-x-2"
           >
@@ -200,19 +321,22 @@ const StockListView = () => {
                   </span>
                 </div>
 
-                {/* 가격 변화 표시 (샘플) */}
+                {/* 등락률 표시 */}
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-gray-500 text-xs md:text-sm">등락률</span>
-                  <span className="text-green-600 font-semibold text-xs md:text-sm">
-                    +2.5%
+                  <span className={`font-semibold text-xs md:text-sm ${
+                    stock.changeRate > 0 ? 'text-red-600' : 
+                    stock.changeRate < 0 ? 'text-blue-600' : 'text-gray-600'
+                  }`}>
+                    {stock.changeRate > 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
                   </span>
                 </div>
 
-                {/* 거래량 (샘플) */}
+                {/* 거래량 */}
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-gray-500 text-xs md:text-sm">거래량</span>
                   <span className="text-gray-700 font-medium text-xs md:text-sm">
-                    {Math.floor(Math.random() * 1000 + 100)}K
+                    {stock.volume ? (stock.volume / 1000).toFixed(0) + 'K' : 'N/A'}
                   </span>
                 </div>
 
