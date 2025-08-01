@@ -6,7 +6,7 @@ const StockListView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // 로그인 상태를 true로 초기화
   const [loginInfo, setLoginInfo] = useState({ userId: '', password: '' });
   const [conditionIndex, setConditionIndex] = useState(0); // 조건검색 인덱스
   const intervalRef = useRef(null);
