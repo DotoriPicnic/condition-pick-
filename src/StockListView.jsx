@@ -68,7 +68,7 @@ const StockListView = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [fetchStocks, startAutoRefresh, stopAutoRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 컴포넌트 마운트 시 초기 데이터 로드 및 자동 새로고침 시작
   useEffect(() => {
@@ -78,7 +78,7 @@ const StockListView = () => {
     return () => {
       stopAutoRefresh();
     };
-  }, [fetchStocks, startAutoRefresh, stopAutoRefresh]);
+  }, [fetchStocks, startAutoRefresh, stopAutoRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading && stocks.length === 0) {
     return (
