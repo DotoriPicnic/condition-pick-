@@ -3,35 +3,16 @@ import KiwoomAPI from './kiwoomApi';
 
 const StockListView = () => {
   const [stocks, setStocks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // 로그인 상태를 true로 초기화
-  const [loginInfo, setLoginInfo] = useState({ userId: '', password: '' });
-  const [conditionIndex, setConditionIndex] = useState(0); // 조건검색 인덱스
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // 자동 로그인 상태로 시작
+  const [conditionIndex, setConditionIndex] = useState(0);
+  const [conditionList, setConditionList] = useState([]);
+  const [selectedCondition, setSelectedCondition] = useState({ index: 0, name: "전체 조건검색" });
   const intervalRef = useRef(null);
   const isPageVisible = useRef(true);
   const kiwoomApi = useRef(new KiwoomAPI());
-
-  // 로그인 처리
-  const handleLogin = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const result = await kiwoomApi.current.login(loginInfo.userId, loginInfo.password);
-      setIsLoggedIn(true);
-      console.log('로그인 성공:', result);
-      
-      // 로그인 성공 후 조건검색 결과 가져오기
-      await fetchConditionResult();
-    } catch (err) {
-      setError(`로그인 실패: ${err.message}`);
-      setIsLoggedIn(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [loginInfo]);
 
   // 조건검색 결과 가져오기
   const fetchConditionResult = useCallback(async () => {
@@ -43,11 +24,11 @@ const StockListView = () => {
       
       // 키움증권 API 응답 형식에 맞게 데이터 변환
       const stockData = result.map(item => ({
-        name: item.종목명 || item.name,
-        code: item.종목코드 || item.code,
+        name: item.종목명 || item.name || '알 수 없음',
+        code: item.종목코드 || item.code || '000000',
         price: parseInt(item.현재가 || item.price) || 0,
         change: parseInt(item.등락폭 || item.change) || 0,
-        changeRate: parseFloat(item.등락률 || item.changeRate) || 0,
+        changeRate: parseFloat(item.등락률 || item.changeRate) || 0.0,
         volume: parseInt(item.거래량 || item.volume) || 0,
         amount: parseInt(item.거래대금 || item.amount) || 0
       }));
@@ -72,15 +53,71 @@ const StockListView = () => {
     }
   }, [conditionIndex]);
 
-  // 실시간 데이터 구독
-  const subscribeRealTimeData = useCallback(async (stockCodes) => {
+  // 조건검색 목록 가져오기
+  const fetchConditionList = useCallback(async () => {
     try {
-      await kiwoomApi.current.subscribeRealTimeData(stockCodes);
-      console.log('실시간 데이터 구독 성공');
+      const response = await fetch('http://localhost:3001/api/condition/list');
+      const result = await response.json();
+      
+      if (result.success) {
+        setConditionList(result.data);
+        if (result.data.length > 0) {
+          setSelectedCondition(result.data[0]);
+          setConditionIndex(result.data[0].index);
+        }
+      }
     } catch (err) {
-      console.error('실시간 데이터 구독 실패:', err);
+      console.error('조건검색 목록 로딩 실패:', err);
+      // 기본 조건검색 목록 설정
+      const defaultConditions = [
+        { index: 0, name: "전체 조건검색" },
+        { index: 1, name: "상승 종목" },
+        { index: 2, name: "하락 종목" },
+        { index: 3, name: "거래량 상위" },
+        { index: 4, name: "시가총액 상위" }
+      ];
+      setConditionList(defaultConditions);
+      setSelectedCondition(defaultConditions[0]);
     }
   }, []);
+
+  // 자동 로그인 처리
+  const handleAutoLogin = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // 자동 로그인 (시뮬레이션)
+      const result = await kiwoomApi.current.login('demo_user', 'demo_pass');
+      setIsLoggedIn(true);
+      console.log('자동 로그인 성공:', result);
+      
+      // 로그인 성공 후 조건검색 목록과 결과 가져오기
+      await fetchConditionList();
+      await fetchConditionResult();
+    } catch (err) {
+      setError(`자동 로그인 실패: ${err.message}`);
+      setIsLoggedIn(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchConditionList, fetchConditionResult]);
+
+  // 조건검색 변경 처리
+  const handleConditionChange = useCallback((condition) => {
+    setSelectedCondition(condition);
+    setConditionIndex(condition.index);
+  }, []);
+
+  // 실시간 데이터 구독 (향후 사용 예정)
+  // const subscribeRealTimeData = useCallback(async (stockCodes) => {
+  //   try {
+  //     await kiwoomApi.current.subscribeRealTimeData(stockCodes);
+  //     console.log('실시간 데이터 구독 성공');
+  //   } catch (err) {
+  //     console.error('실시간 데이터 구독 실패:', err);
+  //   }
+  // }, []);
 
   const startAutoRefresh = useCallback(() => {
     if (intervalRef.current) {
@@ -91,7 +128,7 @@ const StockListView = () => {
       if (isPageVisible.current && isLoggedIn) {
         fetchConditionResult();
       }
-    }, 300000); // 5분 (300초)
+    }, 30000); // 30초 (실시간 데이터와 동기화)
   }, [fetchConditionResult, isLoggedIn]);
 
   const stopAutoRefresh = useCallback(() => {
@@ -121,7 +158,12 @@ const StockListView = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchConditionResult, startAutoRefresh, stopAutoRefresh, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchConditionResult, startAutoRefresh, stopAutoRefresh, isLoggedIn]);
+
+  // 컴포넌트 마운트 시 자동 로그인 및 데이터 로드
+  useEffect(() => {
+    handleAutoLogin();
+  }, [handleAutoLogin]);
 
   // 컴포넌트 마운트 시 초기 데이터 로드 및 자동 새로고침 시작
   useEffect(() => {
@@ -133,80 +175,21 @@ const StockListView = () => {
     return () => {
       stopAutoRefresh();
     };
-  }, [fetchConditionResult, startAutoRefresh, stopAutoRefresh, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchConditionResult, startAutoRefresh, stopAutoRefresh, isLoggedIn]);
 
-  // 로그인 폼 렌더링
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">키움증권 로그인</h1>
-            <p className="text-gray-600">조건검색 결과를 확인하려면 로그인해주세요</p>
-          </div>
-          
-          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">아이디</label>
-              <input
-                type="text"
-                value={loginInfo.userId}
-                onChange={(e) => setLoginInfo(prev => ({ ...prev, userId: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="키움증권 아이디"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
-              <input
-                type="password"
-                value={loginInfo.password}
-                onChange={(e) => setLoginInfo(prev => ({ ...prev, password: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="키움증권 비밀번호"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">조건검색 인덱스</label>
-              <input
-                type="number"
-                value={conditionIndex}
-                onChange={(e) => setConditionIndex(parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="0"
-                min="0"
-              />
-            </div>
-            
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-            >
-              {loading ? '로그인 중...' : '로그인'}
-            </button>
-          </form>
-          
-          {error && (
-            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-              {error}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // 조건검색 변경 시 결과 다시 가져오기
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchConditionResult();
+    }
+  }, [conditionIndex, isLoggedIn, fetchConditionResult]);
 
   if (loading && stocks.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="flex justify-center items-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">데이터를 불러오는 중...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">실시간 데이터를 불러오는 중...</p>
         </div>
       </div>
     );
@@ -214,7 +197,7 @@ const StockListView = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center p-4">
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
         <div className="text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,127 +217,155 @@ const StockListView = () => {
     );
   }
 
-  if (stocks.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-100 flex items-center justify-center p-4">
-        <div className="text-center">
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      {/* 헤더 */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">실시간 조건검색 결과</h2>
+          <p className="text-gray-600">
+            {selectedCondition.name} - {stocks.length}개 종목
+          </p>
+          {lastUpdate && (
+            <p className="text-sm text-gray-500">
+              마지막 업데이트: {lastUpdate.toLocaleString('ko-KR')}
+            </p>
+          )}
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
+          {/* 조건검색 선택 */}
+          <div className="relative">
+            <select
+              value={selectedCondition.index}
+              onChange={(e) => {
+                const condition = conditionList.find(c => c.index === parseInt(e.target.value));
+                if (condition) {
+                  handleConditionChange(condition);
+                }
+              }}
+              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {conditionList.map((condition) => (
+                <option key={condition.index} value={condition.index}>
+                  {condition.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+              </svg>
+            </div>
+          </div>
+          
+          {/* 새로고침 버튼 */}
+          <button 
+            onClick={fetchConditionResult}
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                새로고침 중...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                새로고침
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* 자동 새로고침 상태 */}
+      <div className="flex items-center justify-center mb-6">
+        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
+        <span className="text-green-600 text-sm font-medium">실시간 데이터 활성화 (30초마다 업데이트)</span>
+      </div>
+
+      {/* 종목 리스트 */}
+      {stocks.length === 0 ? (
+        <div className="text-center py-12">
           <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33" />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">조건을 만족하는 종목이 없습니다</h2>
-          <p className="text-gray-600">현재 필터링 조건에 맞는 종목이 없습니다.</p>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">조건을 만족하는 종목이 없습니다</h3>
+          <p className="text-gray-600">현재 선택된 조건에 맞는 종목이 없습니다.</p>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        {/* 헤더 */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
-            키움증권 조건검색 결과
-          </h1>
-          <p className="text-gray-600 mb-2">
-            조건검색 인덱스 {conditionIndex} - {stocks.length}개 종목
-          </p>
-          {lastUpdate && (
-            <p className="text-gray-500 text-sm">
-              마지막 업데이트: {lastUpdate.toLocaleString('ko-KR')}
-            </p>
-          )}
-          <div className="flex items-center justify-center mt-2 space-x-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-green-600 text-sm font-medium">자동 새로고침 활성화 (5분마다)</span>
-          </div>
-        </div>
-
-        {/* 수동 새로고침 버튼 */}
-        <div className="text-center mb-6">
-          <button 
-            onClick={fetchConditionResult}
-            disabled={loading}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200 flex items-center mx-auto space-x-2"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>새로고침 중...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>수동 새로고침</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* 종목 리스트 - 반응형 그리드 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-          {stocks.map((stock, index) => (
-            <div
-              key={`${stock.code}-${index}`}
-              className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100 overflow-hidden"
-            >
-              {/* 카드 헤더 */}
-              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 md:px-6 py-4">
-                <h3 className="text-white font-semibold text-base md:text-lg truncate">
-                  {stock.name}
-                </h3>
-                <p className="text-indigo-100 text-xs md:text-sm font-mono">
-                  {stock.code}
-                </p>
-              </div>
-
-              {/* 카드 바디 */}
-              <div className="p-4 md:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-600 text-xs md:text-sm font-medium">현재가</span>
-                  <span className="text-xl md:text-2xl font-bold text-gray-800">
-                    {stock.price.toLocaleString()}원
-                  </span>
-                </div>
-
-                {/* 등락률 표시 */}
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-500 text-xs md:text-sm">등락률</span>
-                  <span className={`font-semibold text-xs md:text-sm ${
-                    stock.changeRate > 0 ? 'text-red-600' : 
-                    stock.changeRate < 0 ? 'text-blue-600' : 'text-gray-600'
-                  }`}>
-                    {stock.changeRate > 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
-                  </span>
-                </div>
-
-                {/* 거래량 */}
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-gray-500 text-xs md:text-sm">거래량</span>
-                  <span className="text-gray-700 font-medium text-xs md:text-sm">
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  종목명
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  종목코드
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  현재가
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  등락폭
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  등락률
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  거래량
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  거래대금
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {stocks.map((stock, index) => (
+                <tr key={`${stock.code}-${index}`} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {stock.name || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                    {stock.code || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
+                    {stock.price ? stock.price.toLocaleString() : 'N/A'}원
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    <span className={stock.change > 0 ? 'text-red-600' : stock.change < 0 ? 'text-blue-600' : 'text-gray-500'}>
+                      {stock.change > 0 ? '+' : ''}{stock.change ? stock.change.toLocaleString() : 'N/A'}원
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    <span className={stock.changeRate > 0 ? 'text-red-600' : stock.changeRate < 0 ? 'text-blue-600' : 'text-gray-500'}>
+                      {stock.changeRate > 0 ? '+' : ''}{stock.changeRate ? stock.changeRate.toFixed(2) : 'N/A'}%
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
                     {stock.volume ? (stock.volume / 1000).toFixed(0) + 'K' : 'N/A'}
-                  </span>
-                </div>
-
-                {/* 액션 버튼 */}
-                <div className="pt-4 border-t border-gray-100">
-                  <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-xs md:text-sm">
-                    상세보기
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
+                    {stock.amount ? (stock.amount / 1000000).toFixed(0) + 'M' : 'N/A'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      )}
 
-        {/* 푸터 */}
-        <div className="text-center mt-8 text-gray-500 text-xs md:text-sm">
-          <p>페이지가 백그라운드 상태일 때는 자동 새로고침이 일시 중지됩니다.</p>
-        </div>
+      {/* 푸터 */}
+      <div className="text-center mt-6 text-gray-500 text-xs">
+        <p>페이지가 백그라운드 상태일 때는 자동 새로고침이 일시 중지됩니다.</p>
+        <p className="mt-1">실시간 데이터: 30초마다 자동 업데이트, 가격 변동 시뮬레이션</p>
       </div>
     </div>
   );
